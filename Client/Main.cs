@@ -26,6 +26,9 @@ namespace DarkMultiPlayer
         public bool fireReset;
         public GameMode gameMode;
         public bool serverAllowCheats = true;
+        public bool scienceCheatPrevented = false;
+        public bool repCheatPrevented = false;
+        public bool fundsCheatPrevented = false;
         //Disconnect message
         public bool displayDisconnectMessage;
         private ScreenMessage disconnectMessage;
@@ -39,6 +42,10 @@ namespace DarkMultiPlayer
         public const int WINDOW_OFFSET = 1664952404;
         //Hack gravity fix.
         private Dictionary<CelestialBody, double> bodiesGees = new Dictionary<CelestialBody,double>();
+        //Advanced cheats fix
+        private float currentScience = 0.0f;
+        private float currentRep = 0.0f;
+        private double currentFunds = 0.0;
         //Command line connect
         public static ServerEntry commandLineConnect;
 
@@ -372,6 +379,14 @@ namespace DarkMultiPlayer
                         }
                     }
 
+                    // save the user's science, funds and reputation
+                    if (HighLogic.LoadedScene == GameScenes.SPACECENTER)
+                    {
+                        currentScience = ResearchAndDevelopment.Instance.Science;
+                        currentRep = Reputation.Instance.reputation;
+                        currentFunds = Funding.Instance.Funds;
+                    }
+
                     //handle use of cheats
                     if (!serverAllowCheats)
                     {
@@ -383,6 +398,24 @@ namespace DarkMultiPlayer
                         foreach (KeyValuePair<CelestialBody, double> gravityEntry in bodiesGees)
                         {
                             gravityEntry.Key.GeeASL = gravityEntry.Value;
+                        }
+
+                        if (!scienceCheatPrevented)
+                        {
+                            GameEvents.OnScienceChanged.Add(singleton.PreventScienceCheats);
+                            scienceCheatPrevented = true;
+                        }
+
+                        if (!repCheatPrevented)
+                        {
+                            GameEvents.OnReputationChanged.Add(singleton.PreventRepCheats);
+                            repCheatPrevented = true;
+                        }
+
+                        if (!fundsCheatPrevented)
+                        {
+                            GameEvents.OnFundsChanged.Add(singleton.PreventFundsCheats);
+                            fundsCheatPrevented = true;
                         }
                     }
 
@@ -551,6 +584,16 @@ namespace DarkMultiPlayer
             }
             HighLogic.CurrentGame = null;
             bodiesGees.Clear();
+
+            scienceCheatPrevented = false;
+            GameEvents.OnScienceChanged.Remove(singleton.PreventScienceCheats);
+
+            repCheatPrevented = false;
+            GameEvents.OnReputationChanged.Remove(singleton.PreventRepCheats);
+
+            fundsCheatPrevented = false;
+            GameEvents.OnFundsChanged.Remove(singleton.PreventFundsCheats);
+            //GameEvents.OnFundsChanged.Remove(singleton.PreventFundsCheats);
         }
 
         public Game.Modes ConvertGameMode(GameMode inputMode)
@@ -649,6 +692,34 @@ namespace DarkMultiPlayer
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
+            }
+        }
+
+        private void PreventScienceCheats(float amount, TransactionReasons reason)
+        {
+            float realAmount = amount - currentScience;
+            if (reason == TransactionReasons.Cheating)
+            {
+                ResearchAndDevelopment.Instance.AddScience(realAmount * -1, TransactionReasons.None);
+            }
+        }
+
+        private void PreventRepCheats(float amount, TransactionReasons reason)
+        {
+            float realAmount = amount - currentRep;
+            DarkLog.Debug("real amt: " + realAmount);
+            if (reason == TransactionReasons.Cheating)
+            {
+                Reputation.Instance.AddReputation(realAmount * -1, TransactionReasons.None);
+            }
+        }
+
+        private void PreventFundsCheats(double amount, TransactionReasons reason)
+        {
+            double realAmount = amount - currentFunds;
+            if (reason == TransactionReasons.Cheating)
+            {
+                Funding.Instance.AddFunds(realAmount * -1, TransactionReasons.None);
             }
         }
     }
